@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UnitPick - which one is really cheaper?</title>
+<style>
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; background:#16201c; color:#eaf3ee; line-height:1.5; }
+  .wrap { max-width:720px; margin:0 auto; padding:26px 16px 50px; }
+  h1 { font-size:28px; } h1 span { color:#f2b84b; }
+  .sub { color:#9fb5aa; margin:6px 0 16px; }
+  .card { background:#1f2d27; border-radius:14px; padding:14px; margin-bottom:12px; }
+  .row { display:grid; grid-template-columns:1.2fr .8fr .8fr 1fr .6fr .7fr; gap:6px; align-items:end; margin-bottom:8px; }
+  .row label { font-size:11.5px; color:#9fb5aa; display:block; }
+  input,select { width:100%; background:#16201c; color:#eaf3ee; border:1px solid #38503f; border-radius:8px; padding:8px; font-size:15px; font-family:inherit; }
+  button { background:#2f4a3b; color:#eaf3ee; border:0; padding:8px 14px; border-radius:8px; cursor:pointer; font-size:14px; margin-right:6px; }
+  .res { display:flex; align-items:center; gap:10px; padding:10px 0; border-top:1px solid #2c4136; }
+  .res:first-child { border-top:0; } .res .nm { flex:0 0 120px; font-weight:600; } .res .bw { flex:1; height:12px; background:#16201c; border-radius:6px; overflow:hidden; } .res .bw i { display:block; height:100%; background:#5d7f6c; }
+  .res.win .bw i { background:#f2b84b; } .res .pv { flex:0 0 150px; text-align:right; font-variant-numeric:tabular-nums; } .res .pv small { display:block; color:#9fb5aa; }
+  .verdict { font-size:19px; font-weight:700; } .verdict em { color:#f2b84b; font-style:normal; }
+  .err { color:#ff9c8a; } .note { font-size:12.5px; color:#7f9a8c; }
+  @media (max-width:600px) { .row { grid-template-columns:1fr 1fr 1fr; } .res .nm { flex-basis:80px; } .res .pv { flex-basis:110px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Unit<span>Pick</span></h1>
+  <div class="sub">Shelf tags use different sizes and units. Enter two to four items and see the real price per 100 g, per 100 mL or each.</div>
+  <div class="card" id="rows"></div>
+  <div class="card"><button id="e1">Cereal: small vs big box</button><button id="e2">Mixed units</button><button id="e3">Soda packs</button><button id="clr">Clear</button></div>
+  <div class="card"><div id="verdict" class="verdict">Fill in at least two items.</div><div id="out"></div></div>
+  <div class="note">Conversions use exact definitions: 1 lb = 0.45359237 kg, 16 oz = 1 lb, 1 US gal = 3.785411784 L, 128 US fl oz = 1 gal. Weight, volume and count cannot be compared with each other. Coupon is taken off the price you pay. Runs in your browser, nothing stored.</div>
+</div>
+<script src="engine.js"></script>
+<script>
+(function () {
+  var U = window.UnitPick, $ = function (i) { return document.getElementById(i); };
+  var UN = [['g','g'],['kg','kg'],['oz','oz (weight)'],['lb','lb'],['ml','mL'],['l','L'],['floz','fl oz'],['pt','pint'],['qt','quart'],['gal','gallon'],['ct','count']];
+  var box = $('rows'), N = 4;
+  for (var i = 0; i < N; i++) {
+    var d = document.createElement('div'); d.className = 'row';
+    d.innerHTML = '<div><label>Name</label><input id="n' + i + '" placeholder="Item ' + (i + 1) + '"></div><div><label>Price $</label><input id="p' + i + '" inputmode="decimal"></div><div><label>Size</label><input id="q' + i + '" inputmode="decimal"></div><div><label>Unit</label><select id="u' + i + '">' + UN.map(function (u) { return '<option value="' + u[0] + '">' + u[1] + '</option>'; }).join('') + '</select></div><div><label>Packs</label><input id="k' + i + '" value="1" inputmode="numeric"></div><div><label>Coupon $</label><input id="o' + i + '" inputmode="decimal"></div>';
+    box.appendChild(d);
+  }
+  function money(x) { return '$' + (x < 1 ? x.toFixed(3) : x.toFixed(2)); }
+  function esc(t) { return t.replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); }
+  function read() { var l = []; for (var i = 0; i < N; i++) l.push({ name: $('n' + i).value.trim(), price: $('p' + i).value, qty: $('q' + i).value, unit: $('u' + i).value, packs: $('k' + i).value, off: $('o' + i).value }); return l; }
+  function render() {
+    var r = U.compare(read());
+    if (r.error) { $('verdict').className = 'verdict' + (r.error.indexOf('Cannot') === 0 ? ' err' : ''); $('verdict').textContent = r.error; $('out').innerHTML = ''; return; }
+    $('verdict').className = 'verdict';
+    var w = r.best, worst = r.rows[r.rows.length - 1].d.per;
+    $('verdict').innerHTML = '<em>' + esc(w.name) + '</em> is cheapest at ' + money(w.d.per) + ' ' + r.label + (r.saving > 1e-9 ? ' - ' + r.savePct.toFixed(1) + '% less than the next best' : ' - tied');
+    $('out').innerHTML = r.rows.map(function (x, k) {
+      return '<div class="res' + (k === 0 ? ' win' : '') + '"><div class="nm">' + esc(x.name) + '</div><div class="bw"><i style="width:' + (worst > 0 ? Math.max(6, x.d.per / worst * 100) : 6) + '%"></i></div><div class="pv"><b>' + money(x.d.per) + '</b> ' + r.label.replace('per ', '/') + '<small>' + (k === 0 ? 'cheapest' : '+' + x.more.toFixed(1) + '% vs cheapest') + ' - pay ' + money(x.d.paid) + '</small></div></div>';
+    }).join('');
+  }
+  function set(list) { for (var i = 0; i < N; i++) { var p = list[i] || {}; $('n' + i).value = p.name || ''; $('p' + i).value = p.price || ''; $('q' + i).value = p.qty || ''; $('u' + i).value = p.unit || 'oz'; $('k' + i).value = p.packs || '1'; $('o' + i).value = p.off || ''; } render(); }
+  document.addEventListener('input', render); document.addEventListener('change', render);
+  $('e1').onclick = function () { set([{ name: 'Small box', price: 2.99, qty: 12, unit: 'oz' }, { name: 'Big box', price: 4.99, qty: 18, unit: 'oz' }]); };
+  $('e2').onclick = function () { set([{ name: 'Store brand', price: 2.10, qty: 500, unit: 'g' }, { name: 'Name brand', price: 2.00, qty: 1, unit: 'lb' }, { name: 'Bulk', price: 7.5, qty: 2, unit: 'lb', off: 1 }]); };
+  $('e3').onclick = function () { set([{ name: '12 pack', price: 7.49, qty: 12, unit: 'floz', packs: 12 }, { name: '2 L bottle', price: 2.19, qty: 2, unit: 'l' }, { name: 'Gallon jug', price: 3.99, qty: 1, unit: 'gal' }]); };
+  $('clr').onclick = function () { set([]); };
+  $('e1').onclick();
+})();
+</script>
+</body>
+</html>
